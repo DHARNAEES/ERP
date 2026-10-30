@@ -1,10 +1,7 @@
+import '../../server/netlify-env.js';
 import express from 'express';
 import serverless from 'serverless-http';
-
-// Netlify has no persistent disk: the SQLite file lives in /tmp and is re-seeded
-// whenever the function starts cold, so demo data resets after idle periods.
-process.env.PEOPLEHUB_DB ??= '/tmp/peoplehub.db';
-const { default: api } = await import('../../server/app.js');
+import api from '../../server/app.js';
 
 // The routes are mounted under /api; map the function URL back onto them.
 const app = express();
