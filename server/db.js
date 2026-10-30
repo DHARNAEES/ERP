@@ -1,6 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 
-export const db = new DatabaseSync(new URL('./peoplehub.db', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'));
+// PEOPLEHUB_DB lets hosts without a persistent disk (e.g. Netlify Functions) point at /tmp.
+export const db = new DatabaseSync(
+  process.env.PEOPLEHUB_DB ?? new URL('./peoplehub.db', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'),
+);
 
 db.exec(`
   PRAGMA foreign_keys = ON;

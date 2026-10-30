@@ -5,5 +5,11 @@
     "dev": "concurrently -n api,web \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
     "install:all": "npm install && npm --prefix server install && npm --prefix client install"
   },
-  "devDependencies": { "concurrently": "^9.0.1" }
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  },
+  "dependencies": {
+    "express": "^4.22.3",
+    "serverless-http": "^4.0.0"
+  }
 }
