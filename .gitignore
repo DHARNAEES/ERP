@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+# local SQLite database (recreated and re-seeded on first run)
+server/*.db
+server/*.db-*
