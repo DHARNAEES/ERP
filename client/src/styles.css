@@ -278,3 +278,37 @@ tbody tr:nth-child(n+5) { animation-delay: 0.2s; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .toolbar h3 { margin: 0; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; animation: none; }
+
+/* ---------- Login, account & role-based views ---------- */
+.login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.login-card { width: 100%; max-width: 380px; padding: 28px; }
+.login-card:hover { transform: none; }
+.login-brand { font-family: var(--font-head); font-size: 28px; font-weight: 800; color: var(--indigo); }
+.card.narrow { max-width: 440px; }
+.section-title { font-family: var(--font-head); font-size: 15px; margin: 4px 0 -6px; color: var(--muted); font-weight: 700; }
+.grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid.four .stat:nth-child(odd) { --tint: var(--indigo); }
+.grid.four .stat:nth-child(even) { --tint: var(--coral); }
+button.stat-link { font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.form-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.form-row input, .form-row select { flex: 1 1 160px; min-width: 0; }
+tr.inactive td { opacity: 0.55; }
+.row-actions input { width: 150px; padding: 3px 8px; }
+.nav-item:disabled { opacity: 0.45; cursor: not-allowed; }
+@media (max-width: 900px) { .grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Show/hide password */
+.pw-field { position: relative; display: block; }
+.pw-field input { width: 100%; box-sizing: border-box; padding-right: 42px; }
+.pw-toggle { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; transition: color 0.2s, background-color 0.2s; }
+.pw-toggle:hover, .pw-toggle[aria-pressed='true'] { color: var(--indigo); background: var(--surface-2); }
+.pw-toggle:focus-visible { outline: 2px solid var(--indigo); outline-offset: 1px; }
+
+/* Add person / personal details */
+.form-section { font-family: var(--font-head); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding-top: 4px; }
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px 14px; }
+.fields label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+.fields label.wide { grid-column: 1 / -1; }
+.fields input, .fields select, .fields textarea { width: 100%; box-sizing: border-box; }
+tr.details-row:hover { background: none; }
+tr.details-row td { padding: 14px 6px 18px; }

@@ -8,7 +8,7 @@ export default function Leaves({ me }) {
   const [leaves, setLeaves] = useState([]);
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
-  const isManager = me.role === 'manager';
+  const isManager = me.level !== 'employee'; // manager (team) or boss (everyone)
 
   const load = () => api(`/leaves${isManager ? '?scope=all' : ''}`).then(setLeaves);
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function Leaves({ me }) {
       </section>
 
       <section className="card">
-        <h3>{isManager ? 'All Leave Requests' : 'My Leave Requests'}</h3>
+        <h3>{isManager ? (me.level === 'boss' ? 'All Leave Requests' : 'Team Leave Requests') : 'My Leave Requests'}</h3>
         <table>
           <thead>
             <tr>
@@ -81,7 +81,7 @@ export default function Leaves({ me }) {
                 <td>{l.days}</td>
                 <td><span className={`chip ${l.status}`}>{l.status}</span></td>
                 <td className="row-actions">
-                  {l.status === 'pending' && isManager && (
+                  {l.can_decide && (
                     <>
                       <button className="btn small" onClick={() => update(l.id, 'approved')}>Approve</button>
                       <button className="btn small" onClick={() => update(l.id, 'rejected')}>Reject</button>

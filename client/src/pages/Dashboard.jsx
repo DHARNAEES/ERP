@@ -21,23 +21,41 @@ function CountUp({ value, decimals = 0 }) {
 
 const TONE = { 'Sick Leave': 'red', 'Casual Leave': 'amber', 'Leave with Pay': 'green', 'Comp Off': 'violet' };
 
-export default function Dashboard({ go }) {
+export default function Dashboard({ me, go }) {
   const [data, setData] = useState(null);
   const [holidays, setHolidays] = useState([]);
   const [leaves, setLeaves] = useState([]);
+  const [overview, setOverview] = useState(null); // managers and the boss only
+  const supervises = me.level !== 'employee';
 
   useEffect(() => {
-    Promise.all([api('/dashboard'), api('/holidays'), api('/leaves')]).then(([d, h, l]) => {
+    Promise.all([api('/dashboard'), api('/holidays'), api('/leaves'), supervises ? api('/overview') : null]).then(([d, h, l, o]) => {
       setData(d);
       setHolidays(h);
       setLeaves(l);
+      setOverview(o);
     });
-  }, []);
+  }, [supervises]);
 
   if (!data) return <div className="muted">Loading…</div>;
 
   return (
     <>
+      {overview && (
+        <>
+          <h2 className="section-title">{overview.scope}</h2>
+          <div className="grid four">
+            <Stat label="People" value={overview.headcount} unit="active" />
+            <Stat label="Checked in" value={overview.checkedInToday} unit="today" />
+            <Stat label="On leave" value={overview.onLeaveToday} unit="today" />
+            <button className="card stat stat-link" onClick={() => go('leaves')}>
+              <div className="muted">Awaiting your approval</div>
+              <div><span className="stat-value"><CountUp value={overview.pendingApprovals} /></span> <span className="muted">requests</span></div>
+            </button>
+          </div>
+          <h2 className="section-title">My own</h2>
+        </>
+      )}
       <div className="grid stats">
         <Stat label="Leave Balance" value={data.totalBalance} decimals={1} unit="days" />
         <Stat label="Pending Requests" value={data.pending} unit="awaiting" />

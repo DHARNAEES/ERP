@@ -12,7 +12,7 @@ function hours(row) {
 export default function Attendance({ me }) {
   const [rows, setRows] = useState([]);
   const [error, setError] = useState('');
-  const isManager = me.role === 'manager';
+  const isManager = me.level !== 'employee'; // manager (team) or boss (everyone)
 
   const load = () => api(`/attendance${isManager ? '?scope=all' : ''}`).then(setRows);
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function Attendance({ me }) {
       </section>
 
       <section className="card">
-        <h3>{isManager ? 'Team Attendance' : 'My Attendance'}</h3>
+        <h3>{isManager ? (me.level === 'boss' ? 'All Attendance' : 'Team Attendance') : 'My Attendance'}</h3>
         <table>
           <thead>
             <tr>
