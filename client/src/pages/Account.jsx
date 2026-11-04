@@ -26,7 +26,7 @@ export default function Account({ me, onChanged }) {
   return (
     <section className="card narrow">
       <h3>Change password</h3>
-      {me.must_change_password && <p className="muted">Your password was set by an administrator. Choose a new one to continue.</p>}
+      {me.must_change_password && <p className="muted">Your password was issued by an administrator. Please set a new password to continue.</p>}
       <form onSubmit={submit} className="form">
         <label>Current password
           <PasswordInput required autoComplete="current-password" value={form.current} onChange={set('current')} />

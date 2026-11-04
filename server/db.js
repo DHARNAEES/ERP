@@ -77,6 +77,17 @@ db.exec(`
     name TEXT NOT NULL,
     optional INTEGER NOT NULL DEFAULT 0
   );
+  CREATE TABLE IF NOT EXISTS work_status (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'on_track' CHECK (status IN ('on_track', 'at_risk', 'blocked')),
+    summary TEXT NOT NULL,
+    plan TEXT,
+    blockers TEXT,
+    hours REAL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, date)
+  );
   CREATE TABLE IF NOT EXISTS attendance (
     user_id INTEGER NOT NULL REFERENCES users(id),
     date TEXT NOT NULL,

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 
-const LABELS = {
+export const LABELS = {
   login: 'Signed in',
-  login_failed: 'Failed sign-in',
+  login_failed: 'Failed sign-in attempt',
   password_changed: 'Changed password',
   password_reset: 'Password reset',
   leave_requested: 'Requested leave',
@@ -15,7 +15,7 @@ const LABELS = {
 };
 
 // SQLite stores UTC as "YYYY-MM-DD HH:MM:SS".
-const when = (at) => new Date(`${at.replace(' ', 'T')}Z`).toLocaleString('en', { dateStyle: 'medium', timeStyle: 'short' });
+export const when = (at) => new Date(`${at.replace(' ', 'T')}Z`).toLocaleString('en', { dateStyle: 'medium', timeStyle: 'short' });
 
 export default function Activity() {
   const [rows, setRows] = useState([]);
@@ -38,17 +38,17 @@ export default function Activity() {
           <button className="btn small" onClick={load}>Refresh</button>
         </div>
       </div>
-      <table>
+      <table className="rt">
         <thead>
           <tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr>
         </thead>
         <tbody>
           {shown.map((r) => (
             <tr key={r.id}>
-              <td>{when(r.at)}</td>
-              <td>{r.actor ?? '—'}</td>
-              <td>{LABELS[r.action] ?? r.action}</td>
-              <td className="muted">{r.detail ?? ''}</td>
+              <td data-label="When">{when(r.at)}</td>
+              <td data-label="Who">{r.actor ?? '—'}</td>
+              <td data-label="Action">{LABELS[r.action] ?? r.action}</td>
+              <td className="muted" data-label="Details">{r.detail ?? ''}</td>
             </tr>
           ))}
           {shown.length === 0 && <tr><td colSpan={4} className="muted">No activity.</td></tr>}

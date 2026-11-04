@@ -100,7 +100,7 @@ export default function Employees({ me }) {
     <>
       {isBoss && (
         <section className="card">
-          <h3>Add Person</h3>
+          <h3>Add Employee</h3>
           <form onSubmit={create} className="form">
             <div className="form-section">Account</div>
             <div className="fields">
@@ -127,7 +127,7 @@ export default function Employees({ me }) {
             </div>
             <div className="form-section">Personal details</div>
             <PersonalFields values={form} onChange={(k, v) => setForm((f) => ({ ...f, [k]: v }))} />
-            <p className="muted">They must change the temporary password the first time they sign in. Personal details are visible to the boss only.</p>
+            <p className="muted">The employee will be required to change this temporary password on first sign-in. Personal details are visible to the Boss role only.</p>
             {error && <div className="error">{error}</div>}
             <div><button className="btn primary" type="submit">Create account</button></div>
           </form>
@@ -136,11 +136,11 @@ export default function Employees({ me }) {
 
       <section className="card">
         <div className="toolbar">
-          <h3>{isBoss ? 'All Employees' : 'My Team'}</h3>
+          <h3>{isBoss ? 'Employee Directory' : 'My Team'}</h3>
           <input type="search" placeholder="Search employees" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search employees" />
         </div>
         {!isBoss && error && <div className="error">{error}</div>}
-        <table>
+        <table className="rt">
           <thead>
             <tr><th>Name</th><th>Email</th><th>Role</th><th>Reports to</th><th>Joined</th>{isBoss && <th>Account</th>}</tr>
           </thead>
@@ -148,9 +148,9 @@ export default function Employees({ me }) {
             {shown.map((e) => (
               <Fragment key={e.id}>
                 <tr className={e.active ? '' : 'inactive'}>
-                  <td>{e.name}{!e.active && <span className="chip rejected">disabled</span>}</td>
-                  <td>{e.email}</td>
-                  <td>
+                  <td data-label="Name">{e.name}{!e.active && <span className="chip rejected">disabled</span>}</td>
+                  <td data-label="Email">{e.email}</td>
+                  <td data-label="Role">
                     {isBoss && e.id !== me.id ? (
                       <select
                         value={e.role}
@@ -161,16 +161,16 @@ export default function Employees({ me }) {
                       </select>
                     ) : roleLabel(e.role)}
                   </td>
-                  <td>
+                  <td data-label="Reports to">
                     {isBoss && e.role !== 'boss' ? (
                       <select value={e.manager_id ?? ''} onChange={(ev) => patch(e.id, { manager_id: Number(ev.target.value) })} aria-label={`Reports to for ${e.name}`}>
                         {supervisors.filter((m) => m.id !== e.id).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
                     ) : (e.manager ?? '—')}
                   </td>
-                  <td>{e.join_date}</td>
+                  <td data-label="Joined">{e.join_date}</td>
                   {isBoss && (
-                    <td className="row-actions">
+                    <td className="row-actions" data-label="Account">
                       <button className="btn small" aria-expanded={editing?.id === e.id} onClick={() => openDetails(e)}>Details</button>
                       {e.id !== me.id && (
                         <button className="btn small" onClick={() => patch(e.id, { active: !e.active })}>{e.active ? 'Disable' : 'Enable'}</button>

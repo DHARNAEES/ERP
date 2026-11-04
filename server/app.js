@@ -39,7 +39,7 @@ function canDecide(approver, leaveOwnerId) {
 
 // Guards a route by access level ('manager' or 'boss'), not by job title.
 const requireRole = (...levels) => (req, res, next) =>
-  levels.includes(levelOf(req.user.role)) ? next() : res.status(403).json({ error: 'Not allowed for your role' });
+  levels.includes(levelOf(req.user.role)) ? next() : res.status(403).json({ error: 'You do not have permission to perform this action' });
 
 const publicUser = (u) => ({
   id: u.id,
@@ -88,7 +88,7 @@ app.use('/api', (req, res, next) => {
   const uid = m && verifyToken(m[1]);
   // Reload the user on every request so role changes and deactivation apply immediately.
   const user = uid && db.prepare('SELECT * FROM users WHERE id = ? AND active = 1').get(uid);
-  if (!user) return res.status(401).json({ error: 'Please sign in' });
+  if (!user) return res.status(401).json({ error: 'Authentication required. Please sign in.' });
   req.user = user;
   next();
 });
@@ -175,14 +175,14 @@ app.get('/api/leaves', (req, res) => {
 app.post('/api/leaves', (req, res) => {
   const { type, start_date, end_date, reason } = req.body ?? {};
   if (!type || !start_date || !end_date) return res.status(400).json({ error: 'type, start_date and end_date are required' });
-  if (end_date < start_date) return res.status(400).json({ error: 'End date is before start date' });
+  if (end_date < start_date) return res.status(400).json({ error: 'The end date cannot be earlier than the start date' });
 
   const days = countWorkingDays(start_date, end_date);
-  if (days === 0) return res.status(400).json({ error: 'Selected range has no working days' });
+  if (days === 0) return res.status(400).json({ error: 'The selected period contains no working days' });
 
   const balance = db.prepare('SELECT days FROM leave_balances WHERE user_id = ? AND type = ?').get(req.user.id, type);
   if (!balance) return res.status(400).json({ error: 'Unknown leave type' });
-  if (balance.days < days) return res.status(400).json({ error: `Only ${balance.days} day(s) of ${type} left` });
+  if (balance.days < days) return res.status(400).json({ error: `Insufficient balance: only ${balance.days} day(s) of ${type} remaining` });
 
   const info = db
     .prepare('INSERT INTO leaves (user_id, type, start_date, end_date, days, reason) VALUES (?, ?, ?, ?, ?, ?)')
@@ -199,7 +199,7 @@ app.patch('/api/leaves/:id', (req, res) => {
   const allowed =
     (status === 'cancelled' && leave.user_id === req.user.id && leave.status === 'pending') ||
     (['approved', 'rejected'].includes(status) && leave.status === 'pending' && canDecide(req.user, leave.user_id));
-  if (!allowed) return res.status(403).json({ error: 'Not allowed' });
+  if (!allowed) return res.status(403).json({ error: 'You do not have permission to perform this action' });
 
   db.exec('BEGIN');
   try {
@@ -236,13 +236,92 @@ app.get('/api/employees', requireRole('manager', 'boss'), (req, res) => {
 // Today's entry first, then history. Managers see their team, the boss sees everyone (scope=all).
 app.get('/api/attendance', (req, res) => {
   const ids = req.query.scope === 'all' && levelOf(req.user.role) !== 'employee' ? scopeIds(req.user) : [req.user.id];
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.month ?? '')) ? req.query.month : isoDate(new Date()).slice(0, 7);
   const rows = db
     .prepare(
       `SELECT a.*, u.name AS employee FROM attendance a JOIN users u ON u.id = a.user_id
-       WHERE a.user_id IN (${placeholders(ids)}) ORDER BY a.date DESC, u.name LIMIT 60`,
+       WHERE a.user_id IN (${placeholders(ids)}) AND a.date LIKE ? ORDER BY a.date DESC, u.name LIMIT 2000`,
     )
-    .all(...ids);
+    .all(...ids, `${month}%`);
   res.json(rows);
+});
+
+// Who is in, out or on leave today: managers see their team, the boss sees everyone.
+app.get('/api/attendance/board', requireRole('manager', 'boss'), (req, res) => {
+  const ids = scopeIds(req.user);
+  const today = isoDate(new Date());
+  res.json(
+    db
+      .prepare(
+        `SELECT u.id, u.name, u.role, a.check_in, a.check_out,
+           EXISTS (SELECT 1 FROM leaves l WHERE l.user_id = u.id AND l.status = 'approved' AND l.start_date <= ? AND l.end_date >= ?) AS on_leave
+         FROM users u LEFT JOIN attendance a ON a.user_id = u.id AND a.date = ?
+         WHERE u.active = 1 AND u.id IN (${placeholders(ids)}) ORDER BY u.name`,
+      )
+      .all(today, today, today, ...ids),
+  );
+});
+
+// ---------- Daily work status ----------
+// Everyone posts their own update (one per day, editable for 7 days). Managers read their team's
+// updates, the boss reads everyone's.
+const WS_STATUSES = ['on_track', 'at_risk', 'blocked'];
+const daysAgo = (n) => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - n);
+  return isoDate(d);
+};
+
+app.get('/api/work-status', (req, res) => {
+  const today = isoDate(new Date());
+  if (req.query.scope !== 'team') {
+    const entries = db.prepare('SELECT * FROM work_status WHERE user_id = ? ORDER BY date DESC LIMIT 30').all(req.user.id);
+    return res.json({ today, entries });
+  }
+  if (levelOf(req.user.role) === 'employee') return res.status(403).json({ error: 'You do not have permission to perform this action' });
+  const date = isRealDate(String(req.query.date ?? '')) ? req.query.date : today;
+  const ids = scopeIds(req.user);
+  const ph = placeholders(ids);
+  const entries = db
+    .prepare(
+      `SELECT w.*, u.name AS employee, u.role FROM work_status w JOIN users u ON u.id = w.user_id
+       WHERE w.date = ? AND w.user_id IN (${ph}) ORDER BY u.name`,
+    )
+    .all(date, ...ids);
+  // Anyone active who has not posted and is not on approved leave that day.
+  const missing = db
+    .prepare(
+      `SELECT u.id, u.name FROM users u
+       WHERE u.active = 1 AND u.id IN (${ph})
+         AND NOT EXISTS (SELECT 1 FROM work_status w WHERE w.user_id = u.id AND w.date = ?)
+         AND NOT EXISTS (SELECT 1 FROM leaves l WHERE l.user_id = u.id AND l.status = 'approved' AND l.start_date <= ? AND l.end_date >= ?)
+       ORDER BY u.name`,
+    )
+    .all(...ids, date, date, date);
+  res.json({ today, date, entries, missing });
+});
+
+app.put('/api/work-status/:date', (req, res) => {
+  const { date } = req.params;
+  const today = isoDate(new Date());
+  if (!isRealDate(date) || date > today || date < daysAgo(7)) {
+    return res.status(400).json({ error: 'Updates can be submitted for today and the previous 7 days only' });
+  }
+  const { status = 'on_track', summary, plan, blockers, hours } = req.body ?? {};
+  const text = (v) => (v == null ? '' : String(v).trim());
+  if (!WS_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+  if (!text(summary)) return res.status(400).json({ error: 'Please describe the work completed' });
+  if (text(summary).length > 2000) return res.status(400).json({ error: 'Work summary is too long (max 2000 characters)' });
+  if (text(plan).length > 1000 || text(blockers).length > 1000) return res.status(400).json({ error: 'Plan and blockers are limited to 1000 characters' });
+  const h = hours === '' || hours == null ? null : Number(hours);
+  if (h !== null && (!Number.isFinite(h) || h < 0 || h > 24)) return res.status(400).json({ error: 'Hours must be between 0 and 24' });
+
+  db.prepare(
+    `INSERT INTO work_status (user_id, date, status, summary, plan, blockers, hours) VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (user_id, date) DO UPDATE SET status = excluded.status, summary = excluded.summary, plan = excluded.plan,
+       blockers = excluded.blockers, hours = excluded.hours, updated_at = CURRENT_TIMESTAMP`,
+  ).run(req.user.id, date, status, text(summary), text(plan) || null, text(blockers) || null, h);
+  res.json(db.prepare('SELECT * FROM work_status WHERE user_id = ? AND date = ?').get(req.user.id, date));
 });
 
 app.post('/api/attendance/check-in', (req, res) => {
@@ -314,7 +393,7 @@ app.post('/api/users', requireRole('boss'), (req, res) => {
   if (!ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role' });
   if (typeof password !== 'string' || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
   const mgr = role === 'boss' ? null : Number(manager_id);
-  if (!validReportsTo(mgr, role)) return res.status(400).json({ error: 'Choose an active manager or boss to report to' });
+  if (!validReportsTo(mgr, role)) return res.status(400).json({ error: 'Select an active manager, team lead or boss as the reporting line' });
 
   try {
     const info = db
@@ -349,7 +428,7 @@ app.patch('/api/users/:id', requireRole('boss'), (req, res) => {
   if (!ROLES.includes(newRole)) return res.status(400).json({ error: 'Invalid role' });
   const newMgr = newRole === 'boss' ? null : manager_id !== undefined ? Number(manager_id) : target.manager_id;
   if ((role !== undefined || manager_id !== undefined) && !validReportsTo(newMgr, newRole)) {
-    return res.status(400).json({ error: 'Choose an active manager or boss to report to' });
+    return res.status(400).json({ error: 'Select an active manager, team lead or boss as the reporting line' });
   }
   if (newMgr === target.id) return res.status(400).json({ error: 'Nobody can report to themselves' });
 
@@ -383,7 +462,7 @@ app.get('/api/audit', requireRole('boss'), (req, res) => {
 
 app.use((err, _req, res, _next) => {
   console.error(err);
-  res.status(500).json({ error: 'Internal error' });
+  res.status(500).json({ error: 'An unexpected error occurred' });
 });
 
 export default app;

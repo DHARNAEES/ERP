@@ -27,9 +27,9 @@ export default function Login({ onLogin }) {
     <div className="login-wrap">
       <form className="card login-card" onSubmit={submit}>
         <div className="login-brand">PeopleHub</div>
-        <p className="muted">Sign in with your work account</p>
+        <p className="muted">Sign in to your account</p>
         <div className="form">
-          <label>Email
+          <label>Work email
             <input type="email" required autoFocus autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
           <label>Password

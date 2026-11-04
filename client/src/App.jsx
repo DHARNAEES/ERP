@@ -5,6 +5,7 @@ import Leaves from './pages/Leaves.jsx';
 import Holidays from './pages/Holidays.jsx';
 import Employees from './pages/Employees.jsx';
 import Attendance from './pages/Attendance.jsx';
+import WorkStatus from './pages/WorkStatus.jsx';
 import Activity from './pages/Activity.jsx';
 import Account from './pages/Account.jsx';
 import Login from './pages/Login.jsx';
@@ -20,6 +21,7 @@ const NAV = [
       { id: 'employees', label: 'Employees', page: Employees, roles: ['manager', 'boss'] },
       { id: 'leaves', label: 'Leaves', page: Leaves },
       { id: 'attendance', label: 'Attendance', page: Attendance },
+      { id: 'workstatus', label: 'Work Updates', page: WorkStatus },
       { id: 'holidays', label: 'Holidays', page: Holidays },
       { id: 'benefits', label: 'Benefits' },
     ],
@@ -109,6 +111,10 @@ export default function App() {
             <div className="muted">{roleLabel(me.role)}</div>
           </div>
         </div>
+        <div className="side-actions">
+          {!me.must_change_password && <button className="side-link" onClick={() => go('account')}>Change password</button>}
+          <button className="side-link" onClick={logout}>Sign out</button>
+        </div>
       </aside>
       <div className="main">
         <header className="topbar">
@@ -120,9 +126,9 @@ export default function App() {
           </div>
           <div className="topbar-actions">
             {!me.must_change_password && current.id !== 'account' && (
-              <button className="btn small" onClick={() => go('account')}>Change password</button>
+              <button className="btn small desktop-only" onClick={() => go('account')}>Change password</button>
             )}
-            <button className="btn small" onClick={logout}>Sign out</button>
+            <button className="btn small desktop-only" onClick={logout}>Sign out</button>
             <button
               className={`switch ${dark ? 'on' : ''}`}
               role="switch"
@@ -135,7 +141,7 @@ export default function App() {
           </div>
         </header>
         <main className="content">
-          {Page ? <Page key={current.id} me={me} go={go} onChanged={loadMe} /> : <div className="card muted">Coming soon.</div>}
+          {Page ? <Page key={current.id} me={me} go={go} onChanged={loadMe} /> : <div className="card muted">This module is not yet available.</div>}
         </main>
       </div>
     </div>
