@@ -1,9 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
-import { hashPassword } from './auth.js';
+import { fileURLToPath } from 'node:url';
+import { randomBytes } from 'node:crypto';
+import { hashPassword, IS_PROD } from './auth.js';
 
 // PEOPLEHUB_DB lets hosts without a persistent disk (e.g. Netlify Functions) point at /tmp.
 export const db = new DatabaseSync(
-  process.env.PEOPLEHUB_DB ?? new URL('./peoplehub.db', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'),
+  process.env.PEOPLEHUB_DB ?? fileURLToPath(new URL('./peoplehub.db', import.meta.url)),
 );
 
 // The login/roles update changed the users table. Databases from before it only hold
@@ -103,10 +105,23 @@ const have = new Set(db.prepare('PRAGMA table_info(users)').all().map((c) => c.n
 for (const col of ['phone', 'gender', 'address', 'emergency_name', 'emergency_phone']) {
   if (!have.has(col)) db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT`);
 }
+// Time (ms) the password last changed; tokens issued before it are rejected.
+if (!have.has('pw_changed_at')) db.exec('ALTER TABLE users ADD COLUMN pw_changed_at INTEGER NOT NULL DEFAULT 0');
 
 if (db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0) {
   // Demo accounts all start with SEED_PASSWORD and must change it at first login.
-  const seedHash = hashPassword(process.env.SEED_PASSWORD ?? 'PeopleHub@123');
+  // In production without SEED_PASSWORD a random one is used, so the well-known demo
+  // password is never live on a public deployment.
+  let seedPassword = process.env.SEED_PASSWORD;
+  if (!seedPassword) {
+    if (IS_PROD) {
+      seedPassword = randomBytes(12).toString('base64url');
+      console.warn('[peoplehub] SEED_PASSWORD not set in production: demo accounts got a random password. Set SEED_PASSWORD to sign in.');
+    } else {
+      seedPassword = 'PeopleHub@123';
+    }
+  }
+  const seedHash = hashPassword(seedPassword);
   const addUser = db.prepare(
     'INSERT INTO users (id, name, email, role, manager_id, password_hash, birthday, join_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   );

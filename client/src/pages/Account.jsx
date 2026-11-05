@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '../api.js';
+import { api, setToken } from '../api.js';
 import PasswordInput from '../components/PasswordInput.jsx';
 
 export default function Account({ me, onChanged }) {
@@ -14,7 +14,8 @@ export default function Account({ me, onChanged }) {
     setDone(false);
     if (form.next !== form.confirm) return setError('New passwords do not match');
     try {
-      await api('/auth/change-password', { method: 'POST', body: { current: form.current, next: form.next } });
+      const { token } = await api('/auth/change-password', { method: 'POST', body: { current: form.current, next: form.next } });
+      if (token) setToken(token); // older sessions are revoked on a password change
       setForm({ current: '', next: '', confirm: '' });
       setDone(true);
       onChanged();
