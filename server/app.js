@@ -67,6 +67,18 @@ const publicUser = (u) => ({
   must_change_password: !!u.must_change_password,
 });
 
+// TEMPORARY deployment check (remove after use): reports only booleans, never any value.
+app.get('/api/health', (_req, res) => {
+  const seed = process.env.SEED_PASSWORD;
+  const boss = db.prepare("SELECT password_hash FROM users WHERE role = 'boss' ORDER BY id LIMIT 1").get();
+  res.json({
+    seedPasswordSet: !!seed,
+    seedPasswordHasEdgeWhitespace: !!seed && seed !== seed.trim(),
+    jwtSecretSet: !!process.env.JWT_SECRET,
+    bossMatchesSeedPassword: !!(seed && boss && verifyPassword(seed, boss.password_hash)),
+  });
+});
+
 // ---------- Login (public) ----------
 // Failed attempts are counted per email: 5 failures lock that email for 15 minutes.
 // The counter is keyed by client IP + email, so a stranger cannot lock out someone else's account
