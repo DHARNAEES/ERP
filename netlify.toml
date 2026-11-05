@@ -10,3 +10,8 @@
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
   status = 200
+
+# node:sqlite needs Node 22.5+ (build and function runtime).
+[build.environment]
+  NODE_VERSION = "22"
+  AWS_LAMBDA_JS_RUNTIME = "nodejs22.x"

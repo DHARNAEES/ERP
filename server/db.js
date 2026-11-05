@@ -1,4 +1,6 @@
-import { DatabaseSync } from 'node:sqlite';
+// Loaded at runtime rather than imported: the Netlify bundler rewrites a static `node:sqlite` import to a
+// non-existent `sqlite` module, which crashed every function call with a 502.
+const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { hashPassword, IS_PROD } from './auth.js';
