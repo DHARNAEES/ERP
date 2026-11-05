@@ -90,6 +90,79 @@ db.exec(`
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, date)
   );
+  CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    category TEXT,
+    make TEXT,
+    rack TEXT,
+    vendor TEXT,
+    unit_price REAL NOT NULL DEFAULT 0,
+    qty REAL NOT NULL DEFAULT 0,
+    min_qty REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS stock_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    change REAL NOT NULL,
+    qty_after REAL NOT NULL,
+    reason TEXT,
+    actor_id INTEGER REFERENCES users(id)
+  );
+  CREATE TABLE IF NOT EXISTS customer_pos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer TEXT NOT NULL,
+    po_no TEXT NOT NULL,
+    po_date TEXT NOT NULL,
+    value REAL NOT NULL DEFAULT 0,
+    type TEXT NOT NULL DEFAULT 'Supply',
+    project_code TEXT,
+    status TEXT NOT NULL DEFAULT 'Open',
+    invoiced REAL NOT NULL DEFAULT 0,
+    created_by INTEGER REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS vendor_pos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vendor TEXT NOT NULL,
+    po_no TEXT NOT NULL,
+    po_date TEXT NOT NULL,
+    value REAL NOT NULL DEFAULT 0,
+    type TEXT NOT NULL DEFAULT 'Supply',
+    project_code TEXT,
+    status TEXT NOT NULL DEFAULT 'Open',
+    paid REAL NOT NULL DEFAULT 0,
+    created_by INTEGER REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS sales_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    engineer_id INTEGER NOT NULL REFERENCES users(id),
+    customer TEXT NOT NULL,
+    po_no TEXT NOT NULL,
+    po_date TEXT NOT NULL,
+    value REAL NOT NULL DEFAULT 0,
+    type TEXT NOT NULL DEFAULT 'Supply',
+    project_code TEXT,
+    invoice_no TEXT,
+    invoice_date TEXT,
+    invoice_value REAL NOT NULL DEFAULT 0,
+    purchase_cost REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    customer TEXT,
+    status TEXT NOT NULL DEFAULT 'Active',
+    owner_id INTEGER REFERENCES users(id),
+    due_date TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
   CREATE TABLE IF NOT EXISTS attendance (
     user_id INTEGER NOT NULL REFERENCES users(id),
     date TEXT NOT NULL,
@@ -157,4 +230,18 @@ if (db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0) {
   addLeave.run(1, 'Casual Leave', '2026-10-09', '2026-10-09', 1, 'Family function', 'approved');
   addLeave.run(1, 'Casual Leave', '2026-10-16', '2026-10-16', 1, 'Personal work', 'approved');
   addLeave.run(3, 'Sick Leave', '2026-11-02', '2026-11-03', 2, 'Fever', 'pending');
+}
+
+// Sample stock so the Stock page has something to show locally. Never seeded in production.
+if (!IS_PROD && db.prepare('SELECT COUNT(*) AS n FROM products').get().n === 0) {
+  const add = db.prepare('INSERT INTO products (code, name, category, make, rack, vendor, unit_price, qty, min_qty) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+  const demo = [
+    ['6007302', 'Connectors M12 Female', 'Connectors', 'SICK', 'R-01-02', 'Acme Components', 200, 375, 50],
+    ['ABMM-A-D', 'Tie Cap', 'Panel Accessories', 'PANDUIT', 'R-01-04', 'Acme Components', 5.3, 347, 100],
+    ['1061396', 'Sensor', 'Sensors', 'SICK', 'R-01-03', 'Beta Automation', 1600, 221, 40],
+    ['2095963', 'Cable, M8 Female, PVC, 5 Mtr, 90 Deg', 'Cables', 'SICK', 'R-01-01', 'Beta Automation', 404, 219, 60],
+    ['LC1D09', 'Contactor 9A', 'Switchgear', 'Schneider', 'R-02-01', 'Gamma Electricals', 1250, 12, 15],
+    ['MCB-C16', 'MCB 16A 1P', 'Switchgear', 'Havells', 'R-02-02', 'Gamma Electricals', 140, 0, 20],
+  ];
+  for (const p of demo) add.run(...p);
 }

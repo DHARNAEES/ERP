@@ -7,6 +7,8 @@ import Employees from './pages/Employees.jsx';
 import Attendance from './pages/Attendance.jsx';
 import WorkStatus from './pages/WorkStatus.jsx';
 import Activity from './pages/Activity.jsx';
+import Stock from './pages/Stock.jsx';
+import { PurchaseOrders, SupplierPOs, Sales, Projects } from './pages/Registers.jsx';
 import Account from './pages/Account.jsx';
 import Login from './pages/Login.jsx';
 import { roleLabel } from './roles.js';
@@ -21,13 +23,42 @@ const NAV = [
       { id: 'employees', label: 'Employees', page: Employees, roles: ['manager', 'boss'] },
       { id: 'leaves', label: 'Leaves', page: Leaves },
       { id: 'attendance', label: 'Attendance', page: Attendance },
-      { id: 'workstatus', label: 'Work Updates', page: WorkStatus },
       { id: 'holidays', label: 'Holidays', page: Holidays },
-      { id: 'benefits', label: 'Benefits' },
     ],
   },
-  { group: 'Finance', items: [{ id: 'payroll', label: 'Payroll' }, { id: 'expenses', label: 'Expenses' }] },
-  { group: 'Sales', items: [{ id: 'orders', label: 'Sales Orders' }] },
+  {
+    group: 'Business Development',
+    items: [
+      { id: 'bom', label: 'BOM' },
+      { id: 'po', label: 'Purchase Order', page: PurchaseOrders, roles: ['manager', 'boss'] },
+      { id: 'sales', label: 'Sales', page: Sales },
+      { id: 'quotation', label: 'Quotation' },
+    ],
+  },
+  {
+    group: 'Accounts',
+    items: [
+      { id: 'dc', label: 'Delivery Challan' },
+      { id: 'proforma', label: 'Proforma Invoice' },
+      { id: 'payroll', label: 'Payroll' },
+      { id: 'expenses', label: 'Expenses' },
+    ],
+  },
+  {
+    group: 'Purchase',
+    items: [
+      { id: 'supplier-po', label: 'Supplier PO', page: SupplierPOs, roles: ['manager', 'boss'] },
+      { id: 'supplier-invoice', label: 'Supplier Invoice' },
+      { id: 'stock', label: 'Stock', page: Stock },
+    ],
+  },
+  {
+    group: 'General',
+    items: [
+      { id: 'projects', label: 'Projects', page: Projects },
+      { id: 'workstatus', label: 'Work Updates', page: WorkStatus },
+    ],
+  },
   { group: 'Administration', roles: ['boss'], items: [{ id: 'activity', label: 'Activity Log', page: Activity }] },
 ];
 
@@ -141,7 +172,7 @@ export default function App() {
           </div>
         </header>
         <main className="content">
-          {Page ? <Page key={current.id} me={me} go={go} onChanged={loadMe} /> : <div className="card muted">This module is not yet available.</div>}
+          {Page ? <Page key={current.id} me={me} go={go} onChanged={loadMe} /> : <div className="card muted">This module is coming soon.</div>}
         </main>
       </div>
     </div>

@@ -3,6 +3,7 @@ import cors from 'cors';
 import { db } from './db.js';
 import { hashPassword, verifyPassword, signToken, verifyToken } from './auth.js';
 import { ROLES, SUPERVISOR_ROLES, levelOf } from './roles.js';
+import { registerErp } from './erp.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -516,6 +517,120 @@ app.patch('/api/users/:id', requireRole('boss'), (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Stock ----------
+// Everyone signed in can view stock. Adding products and adjusting quantities is for managers and the boss.
+const stockStatus = (p) => (p.qty <= 0 ? 'out' : p.qty <= p.min_qty ? 'low' : 'in');
+
+app.get('/api/stock', (req, res) => {
+  const { q, category, make, status, rack, vendor } = req.query;
+  const includeOut = req.query.include_out === '1';
+  const where = [];
+  const args = [];
+  const like = (v) => `%${String(v).replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+  if (q) {
+    where.push("(code LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' OR make LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\')");
+    args.push(like(q), like(q), like(q), like(q));
+  }
+  for (const [col, v] of [['category', category], ['make', make], ['rack', rack], ['vendor', vendor]]) {
+    if (v) {
+      where.push(`${col} = ?`);
+      args.push(String(v));
+    }
+  }
+  if (status === 'out') where.push('qty <= 0');
+  else if (status === 'low') where.push('qty > 0 AND qty <= min_qty');
+  else if (status === 'in') where.push('qty > min_qty');
+  else if (!includeOut) where.push('qty > 0');
+  const rows = db
+    .prepare(`SELECT * FROM products ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY name LIMIT 300`)
+    .all(...args)
+    .map((p) => ({ ...p, value: p.qty * p.unit_price, status: stockStatus(p) }));
+
+  const all = db.prepare('SELECT qty, min_qty, unit_price FROM products').all();
+  const distinct = (col) => db.prepare(`SELECT DISTINCT ${col} AS v FROM products WHERE ${col} IS NOT NULL AND ${col} != '' ORDER BY v`).all().map((r) => r.v);
+  res.json({
+    summary: {
+      totalProducts: all.length,
+      totalAvailable: all.reduce((s, p) => s + p.qty, 0),
+      inventoryValue: all.reduce((s, p) => s + p.qty * p.unit_price, 0),
+      lowStock: all.filter((p) => p.qty > 0 && p.qty <= p.min_qty).length,
+      outOfStock: all.filter((p) => p.qty <= 0).length,
+    },
+    options: { categories: distinct('category'), makes: distinct('make'), racks: distinct('rack'), vendors: distinct('vendor') },
+    hiddenOut: includeOut || status ? 0 : all.filter((p) => p.qty <= 0).length,
+    products: rows,
+  });
+});
+
+app.get('/api/stock/log', (req, res) => {
+  res.json(
+    db
+      .prepare(
+        `SELECT s.id, s.at, s.change, s.qty_after, s.reason, p.code, p.name, u.name AS actor
+         FROM stock_log s JOIN products p ON p.id = s.product_id LEFT JOIN users u ON u.id = s.actor_id
+         ORDER BY s.id DESC LIMIT 200`,
+      )
+      .all(),
+  );
+});
+
+app.post('/api/stock/products', requireRole('manager', 'boss'), (req, res) => {
+  const b = req.body ?? {};
+  const text = (v, max) => (v == null ? '' : String(v).trim().slice(0, max));
+  const num = (v) => (v === '' || v == null ? 0 : Number(v));
+  const code = text(b.code, 60);
+  const name = text(b.name, 200);
+  const unit_price = num(b.unit_price);
+  const qty = num(b.qty);
+  const min_qty = num(b.min_qty);
+  if (!code || !name) return res.status(400).json({ error: 'Code and name are required' });
+  if (![unit_price, qty, min_qty].every((n) => Number.isFinite(n) && n >= 0 && n < 1e9)) {
+    return res.status(400).json({ error: 'Price and quantities must be zero or more' });
+  }
+  try {
+    const info = db
+      .prepare('INSERT INTO products (code, name, category, make, rack, vendor, unit_price, qty, min_qty) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(code, name, text(b.category, 80) || null, text(b.make, 80) || null, text(b.rack, 40) || null, text(b.vendor, 120) || null, unit_price, qty, min_qty);
+    if (qty > 0) {
+      db.prepare('INSERT INTO stock_log (product_id, change, qty_after, reason, actor_id) VALUES (?, ?, ?, ?, ?)').run(
+        info.lastInsertRowid, qty, qty, 'Opening stock', req.user.id,
+      );
+    }
+    audit(req.user.id, 'product_created', `${code} ${name}`);
+    res.status(201).json({ id: Number(info.lastInsertRowid) });
+  } catch (err) {
+    if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'A product with that code already exists' });
+    throw err;
+  }
+});
+
+app.post('/api/stock/products/:id/adjust', requireRole('manager', 'boss'), (req, res) => {
+  const change = Number(req.body?.change);
+  const reason = String(req.body?.reason ?? '').trim().slice(0, 200);
+  if (!Number.isFinite(change) || change === 0 || Math.abs(change) >= 1e9) return res.status(400).json({ error: 'Enter a non-zero quantity change' });
+  if (!reason) return res.status(400).json({ error: 'A reason is required' });
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const p = db.prepare('SELECT * FROM products WHERE id = ?').get(Number(req.params.id));
+    if (!p) {
+      db.exec('ROLLBACK');
+      return res.status(404).json({ error: 'Not found' });
+    }
+    if (p.qty + change < 0) {
+      db.exec('ROLLBACK');
+      return res.status(400).json({ error: `Only ${p.qty} in stock; cannot remove ${Math.abs(change)}` });
+    }
+    const after = p.qty + change;
+    db.prepare('UPDATE products SET qty = ? WHERE id = ?').run(after, p.id);
+    db.prepare('INSERT INTO stock_log (product_id, change, qty_after, reason, actor_id) VALUES (?, ?, ?, ?, ?)').run(p.id, change, after, reason, req.user.id);
+    db.exec('COMMIT');
+    res.json({ ok: true, qty: after });
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+});
+
 // Boss sets a temporary password for someone who is locked out. They must change it at next sign-in,
 // and every session they already had is revoked.
 app.post('/api/users/:id/reset-password', requireRole('boss'), (req, res) => {
@@ -543,6 +658,8 @@ app.get('/api/audit', requireRole('boss'), (req, res) => {
       .all(limit),
   );
 });
+
+registerErp(app, { audit, levelOf, scopeIds, isRealDate, todayStr });
 
 app.use((err, _req, res, _next) => {
   console.error(err);
